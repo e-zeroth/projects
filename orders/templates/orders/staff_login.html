@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-5" style="max-width: 380px;">
+    <h3 class="mb-4 text-center">Staff Dashboard Login</h3>
+
+    {% if messages %}
+        {% for msg in messages %}
+            <div class="alert alert-{{ msg.tags }}">{{ msg }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" class="card card-body shadow-sm">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="code" class="form-label">Enter your personal code</label>
+            <input type="text"
+                   name="code"
+                   id="code"
+                   class="form-control form-control-lg text-center"
+                   autocomplete="off"
+                   autofocus
+                   required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Enter</button>
+    </form>
+</div>
+{% endblock %}

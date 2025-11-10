@@ -1,0 +1,94 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Room {{ room.name }} – Consolidated Ticket</title>
+    <!-- Use the same Bootstrap theme you already use -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/sandstone/bootstrap.min.css"
+          crossorigin="anonymous">
+
+    <style>
+        /* --------------------------------------------------------------
+           Print‑friendly styling – narrow receipt width, minimal margins
+           -------------------------------------------------------------- */
+        @media print {
+            body { margin: 0; padding: 0; }
+        }
+        .ticket {
+            max-width: 80mm;                 /* typical receipt‑paper width */
+            margin: auto;
+            font-size: 0.9rem;
+        }
+        .order-header {
+            margin-top: 0.5rem;
+            border-top: 1px solid #ddd;
+            padding-top: 0.3rem;
+        }
+        .seat-label { font-weight: bold; }
+        .item-mod, .item-temp, .item-notes { font-size: 0.75rem; color:#555; }
+    </style>
+</head>
+<body>
+<div class="ticket">
+
+    <h4 class="text-center">Room {{ room.name }}</h4>
+    <p class="text-center"><small>Generated {{ now|date:"Y‑m‑d H:i" }}</small></p>
+
+    {% for order in orders %}
+        <div class="order-header">
+            <strong>Table {{ order.table.number }}</strong>
+            {% if order.opened_by %}
+                <small class="text-muted"> – {{ order.opened_by.get_short_name|default:order.opened_by.username }}</small>
+            {% endif %}
+        </div>
+
+        {% for seat in order.seats.all %}
+            <div class="ms-2 mb-1"><em>Seat {{ seat.label }}</em></div>
+            <ul class="list-unstyled ms-4">
+                {% for sel in seat.selections.all %}
+                    <li class="mb-1">
+                        {{ sel.item.name }}
+
+                        {% if sel.modifiers.all %}
+                            <div class="item-mod">
+                                {% for mod in sel.modifiers.all %}
+                                    {{ mod.name }}{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {% if sel.temperatures.all %}
+                            <div class="item-temp">
+                                {% for tmp in sel.temperatures.all %}
+                                    {{ tmp.name }}{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {% if sel.notes %}
+                            <div class="item-notes">{{ sel.notes }}</div>
+                        {% endif %}
+                    </li>
+                {% empty %}
+                    <li class="text-muted small">No items on this seat.</li>
+                {% endfor %}
+            </ul>
+        {% endfor %}
+    {% empty %}
+        <p class="text-muted">No open orders in this room.</p>
+    {% endfor %}
+
+    <hr class="my-2">
+    <p class="text-center"><small>End of ticket</small></p>
+</div>
+
+<script>
+    // Auto‑open the print dialog as soon as the page loads
+    window.onload = function () {
+        window.print();
+    };
+</script>
+</body>
+</html>

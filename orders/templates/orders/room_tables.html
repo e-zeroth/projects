@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Room: {{ room.name }}</h2>
+        <a href="{% url 'orders:room_dashboard' %}" class="btn btn-link">← Back to Rooms</a>
+    </div>
+
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>Status</th>
+                <th>Open Order?</th>
+                <th>Opened By</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for table in tables %}
+                <!-- {# The reverse relation is `order_set`; we expect at most one order per table #} -->
+                {% with order=table.orders.first %}
+                <tr{% if order and order.opened_by_staff.id == request.session.staff_id %} class="table-success"{% endif %}>
+                    <td>Table {{ table.number }}</td>
+                    <td>
+                        {% if order %}
+                            <span class="badge bg-success">Open</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Idle</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if order %}
+                            Order #{{ order.id }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if order and order.opened_by_staff %}
+                            {{ order.opened_by_staff.name }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if order %}
+                            <a href="{% url 'orders:table_detail' table.id %}"
+                               class="btn btn-sm btn-outline-primary">Open</a>
+                            {% comment %}New (working) line{% endcomment %}
+                            <a href="{% url 'orders:print_ticket' order.id %}"
+                            class="btn btn-sm btn-outline-success"
+                            target="_blank">Print Ticket</a>
+                        {% else %}
+                            <form method="post" action="{% url 'orders:start_order' table.id %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success btn-sm">Start Order</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endwith %}
+            {% empty %}
+                <tr><td colspan="4" class="text-muted">No tables in this room.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

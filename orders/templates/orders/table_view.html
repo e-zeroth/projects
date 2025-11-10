@@ -1,0 +1,690 @@
+<!-- {# orders/templates/orders/table_view.html #} -->
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Table {{ table.number }} - Restaurant Tablet{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4"
+     data-new-seat-id="{{ new_seat_id|default:'' }}"
+     data-active-seat-id="{{ request.GET.active_seat|default:'' }}">
+
+    <!-- <h2 class="mb-4">Table {{ table.number }}</h2>
+
+    {% if opened_by %}
+        <p class="text-muted mb-2">
+            <i class="bi bi-person"></i>
+            Opened by {{ opened_by.get_full_name|default:opened_by.name }}
+        </p>
+    {% endif %} -->
+     <div class="d-flex flex-wrap align-items-center mb-3 gap-3 header-line">
+        <!-- {# 1️⃣ Table number (big) #} -->
+        <h2 class="mb-0">Table {{ table.number }} &nbsp;-&nbsp;
+            <small class="text-muted">Room: {{ table.room.name }}</small></h2>
+        <!-- {# 2️⃣ “Opened by …” – only shown when the order has an opener #} -->
+        {% if opened_by %}
+            <p class="text-muted mb-0">
+                <i class="bi bi-person"></i>
+                Opened by {{ order.opened_by_staff.name }}
+            </p>
+        {% endif %}
+
+        <!-- {# 3️⃣ When an order exists we show the current seat‑range,
+            otherwise we keep the space empty so the layout stays aligned #} -->
+        {% if order %}
+            <p class="text-muted mb-0">
+                <i class="bi bi-person-workspace"></i>
+                Working on seats
+                {% if my_start and my_end %}
+                    {{ my_start }} – {{ my_end }}
+                {% else %}
+                    all seats
+                {% endif %}
+            </p>
+        {% endif %}
+        <a href="{% url 'orders:room_tables' table.room.id %}"
+        class="btn btn-link">← Back to tables</a>
+        
+    </div>
+    <!-- {# --------------------------------------------------------------
+       IF THERE IS NO ORDER YET
+       -------------------------------------------------------------- #} -->
+    {% if not order %}
+
+        <!-- {# ---------- RANGE SELECTOR (GET) ---------- #} -->
+        <form method="get"
+              action="{% url 'orders:table_detail' table.id %}"
+              class="row g-2 mb-3">
+            {% csrf_token %}
+            <div class="col-auto">
+                <label class="form-label small mb-0">My first seat</label>
+                <input type="number"
+                       name="my_start"
+                       class="form-control form-control-sm"
+                       placeholder="e.g. 1"
+                       value="{{ my_start|default_if_none:'' }}">
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">My last seat</label>
+                <input type="number"
+                       name="my_end"
+                       class="form-control form-control-sm"
+                       placeholder="e.g. 10"
+                       value="{{ my_end|default_if_none:'' }}">
+            </div>
+            <div class="col-auto align-self-end">
+                <button type="submit"
+                        class="btn btn-outline-primary btn-sm mt-2">
+                    <i class="bi bi-funnel"></i> Filter Seats
+                </button>
+            </div>
+        </form>
+
+        <!-- {# ---------- START ORDER FORM (POST) ---------- #} -->
+        <form method="post"
+              action="{% url 'orders:start_order' table.id %}"
+              class="mb-3">
+            {% csrf_token %}
+            <input type="hidden" name="my_seat_start" value="{{ my_start|default_if_none:'' }}">
+            <input type="hidden" name="my_seat_end"   value="{{ my_end|default_if_none:'' }}">
+            {{ start_order_form.seat_count }}   
+            <button type="submit"
+                    class="btn btn-success mt-2">
+                <i class="bi bi-play-circle"></i> Start Order
+            </button>
+
+            <!-- {# Show validation errors, if any #} -->
+            {% if start_order_form.errors %}
+                <div class="mt-2 alert alert-danger">
+                    {{ start_order_form.errors }}
+                </div>
+            {% endif %}
+        </form>
+
+    <!-- {# --------------------------------------------------------------
+       IF AN ORDER ALREADY EXISTS
+       -------------------------------------------------------------- #} -->
+    {% else %} 
+
+        <!-- <p class="text-muted mb-2">
+            <i class="bi bi-person-workspace"></i>
+            Working on seats
+            {% if my_start and my_end %}
+                {{ my_start }} - {{ my_end }}
+            {% else %}
+                all seats
+            {% endif %}
+        </p> -->
+        <!-- {# --------------------------------------------------------------
+       NEW – “Join this order” button (visible only when an order exists)
+       -------------------------------------------------------------- #} -->
+        <form method="post"
+            action="{% url 'orders:join_order' table.id %}"
+            class="mb-3">
+            {% csrf_token %}
+            <!-- {# Preserve the current range (or let the user type a new one) #} -->
+            <input type="hidden" name="my_seat_start" value="{{ my_start|default_if_none:'' }}">
+            <input type="hidden" name="my_seat_end"   value="{{ my_end|default_if_none:'' }}">
+
+            <!-- {# You can keep the hidden seat_count field if you want a fallback #} -->
+            {{ start_order_form.seat_count }}
+
+            <button type="submit"
+                    class="btn btn-primary mt-2">
+                <i class="bi bi-plus-circle"></i> Join this order
+            </button>
+
+            {% if start_order_form.errors %}
+                <div class="mt-2 alert alert-danger">
+                    {{ start_order_form.errors }}
+                </div>
+            {% endif %}
+        </form>
+        <div class="row g-4">
+
+            <!-- {# ====================== LEFT - SEATS ====================== #} -->
+            <div class="col-md-4">
+                <div class="seat-scroll-container">
+                    <h4>Seats</h4>
+
+                    {% for seat in seats %}
+                        <div class="card mb-2 seat-card"
+                            data-seat-id="{{ seat.id }}"
+                            data-seat-label="{{ seat.label }}"
+                            data-assigned-to="{{ seat.assigned_to.id|default:'' }}"
+                            style="cursor:pointer;">
+                            <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                                <strong class="seat-label">{{ seat.label }}</strong>
+
+                                {% if seat.assigned_to %}
+                                    <span class="badge bg-info ms-2">
+                                        {{ seat.assigned_to.get_short_name|default:seat.assigned_to.name }}
+                                    </span>
+                                {% endif %}
+
+                                <form method="post"
+                                    action="{% url 'orders:remove_seat' seat.id %}"
+                                    class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="Remove seat">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- {# ----- Selections for this seat ----- #} -->
+                            <ul class="list-group list-group-flush seat-selections" id="seat-list-{{ seat.id }}">
+                                {% for selection in seat.selections.all %}
+                                    <li class="list-group-item py-1 d-flex justify-content-between align-items-start" 
+                                        data-selection-id="{{ selection.id }}">
+                                        <div>
+                                            <strong>{{ selection.item.name }}</strong>
+                                            {% if selection.modifiers.all %}
+                                                <small class="text-muted d-block">
+                                                     {% for mod in selection.modifiers.all %}
+                                                            {{ mod.name }}{% if not forloop.last %}, {% endif %}
+                                                        {% endfor %}
+                                                </small>
+                                            {% endif %}
+                                            {% if selection.temperatures.all %}
+                                                <small class="text-muted d-block">
+                                                    {% if selection.temperatures.count > 1 %}s{% endif %}
+                                                    {% for temp in selection.temperatures.all %}
+                                                        {{ temp.name }}{% if not forloop.last %}, {% endif %}
+                                                    {% endfor %}
+                                                </small>
+                                            {% endif %}
+                                            {% if selection.notes %}
+                                                <small class="text-muted d-block">{{ selection.notes }}</small>
+                                            {% endif %}
+                                        </div>
+
+                                        <form method="post"
+                                            action="{% url 'orders:remove_selection' selection.id %}"
+                                            class="ms-2">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    title="Remove selection">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </li>
+                                {% empty %}
+                                    <li class="list-group-item text-muted py-1">No items yet.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% empty %}
+                        <p class="text-muted">No seats added yet.</p>
+                    {% endfor %}
+
+                    <!-- {# ----- Add a new seat (auto-increment) ----- #} -->
+                    <form method="post"
+                        action="{% url 'orders:add_seat' order.id %}"
+                        class="mt-3">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="btn btn-primary w-100">
+                            <i class="bi bi-plus-circle"></i> Add Seat
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- {# ====================== CENTER - MENU ====================== #} -->
+            <div class="col-md-5">
+                <h4>Menu</h4>
+
+                <div class="row row-cols-1 row-cols-sm-2 g-3">
+                    {% for item in menu_items %}
+                        <!-- {# ------- EACH CARD HAS ITS OWN FORM ------- #} -->
+                        <div class="col">
+                            <form method="post"
+                                  action="{% url 'orders:add_selection' %}"
+                                  class="add-selection-form simple-add-form"
+                                  data-item-id="{{ item.id }}">
+                                {% csrf_token %}
+
+                                <!-- {# Hidden seat id - will be filled by JS when a seat is clicked #} -->
+                                <input type="hidden"
+                                       name="seat_id"
+                                       class="selected-seat-id"
+                                       value="">
+
+                                <!-- {# Hidden item id #} -->
+                                <input type="hidden"
+                                       name="item_id"
+                                       value="{{ item.id }}">
+
+
+                                <div class="card h-100">
+                                    <div class="card-body d-flex flex-column">
+                                        <h5 class="card-title">{{ item.name }}</h5>
+
+                                        <!-- {# ----- Modifiers (checkboxes) ----- #} -->
+                                        <!-- {% if modifiers %}
+                                            <div class="mb-0">
+                                                <label class="form-label small">Mods:</label>
+                                                {% for mod in modifiers %}
+                                                    <div class="form-check form-check-inline">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               name="modifier_ids"
+                                                               value="{{ mod.id }}"
+                                                               id="mod{{ mod.id }}-{{ item.id }}">
+                                                        <label class="form-check-label"
+                                                                for="mod{{ mod.id }}-{{ item.id }}">
+                                                                {{ mod.label }}
+                                                        </label>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %} -->
+
+                                        <!-- {# ----- Optional notes ----- #} -->
+                                        <!-- <textarea name="notes"
+                                                  rows="1"
+                                                  placeholder="Special instructions"
+                                                  class="form-control form-control-sm mb-2"></textarea>
+                                        -->
+                                        <textarea name="notes"
+                                                rows="1"
+                                                placeholder="Special instructions"
+                                                class="form-control form-control-sm mb-2"></textarea>
+                                        <!-- {# ----- Temperature check‑boxes (rendered directly on the card) ----- #} -->
+                                        {% if item.temperatures.all %}
+                                            <div class="mb-2">
+                                                <label class="form-label small">C:</label>
+                                                {% for temp in item.temperatures.all %}
+                                                    <div class="form-check form-check-inline">
+                                                        <input class="form-check-input"
+                                                            type="checkbox"
+                                                            name="temperature_ids"
+                                                            value="{{ temp.id }}"
+                                                            id="temp-{{ item.id }}-{{ temp.id }}">
+                                                        <label class="form-check-label"
+                                                            for="temp-{{ item.id }}-{{ temp.id }}">
+                                                            {{ temp.name }}
+                                                        </label>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        
+                                        <button type="submit"
+                                                class="btn btn-success btn-sm w-100 mt-auto add-to-seat-btn"
+                                                disabled>
+                                            <i class="bi bi-cart-plus"></i> Add to Seat
+                                        </button> 
+                                        <button type="button"
+                                                class="btn btn-outline-secondary btn-sm mt-2 add-mods-btn"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#modsModal"
+                                                data-item-id="{{ item.id }}"
+                                                data-item-name="{{ item.name }}">
+                                            <i class="bi bi-plus-square"></i> Add Mods
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- {# ====================== RIGHT - ACTIONS ====================== #} -->
+            <div class="col-md-3">
+                <h4>Actions</h4>
+
+                <div class="d-grid gap-2">
+                    <form method="post"
+                          action="{% url 'orders:print_ticket' order.id %}"
+                          class="mb-2">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="btn btn-outline-primary w-100 mb-2">
+                            <i class="bi bi-printer"></i> Print Ticket
+                        </button>
+                    </form>
+
+                    <!-- Refresh button – keeps the same query string -->
+                    <a href="{{ request.get_full_path }}"
+                       class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </a>
+
+                    {% if order %}
+                        <form method="post"
+                            action="{% url 'orders:close_order' order.id %}"
+                            class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Are you sure you want to close this order?');">
+                                Close Order
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>  
+    {% endif %}
+</div>
+<!-- {# --------------------------------------------------------------
+   MODIFIER SELECTION MODAL (re‑used for every menu item)
+   -------------------------------------------------------------- #} -->
+<div class="modal fade" id="modsModal" tabindex="-1" aria-labelledby="modsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post"
+                  action="{% url 'orders:add_selection' %}"
+                  class="add-selection-form"
+                  id="modsModalForm">
+                {% csrf_token %}
+
+                <!-- {# ---- hidden fields that will be filled by JS ---- #} -->
+                <input type="hidden" name="seat_id" class="selected-seat-id" value="">
+                <input type="hidden" name="item_id" id="modalItemId" value="">
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modsModalLabel">Add Modifiers for <span id="modalItemName"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <!-- {# ----- Modifiers check‑boxes (populated by JS) ----- #} -->
+                    <div id="modalModifiersContainer" class="mb-3">
+                        <!-- JS will inject a list of checkboxes here -->
+                        <p class="text-muted">Loading modifiers…</p>
+                    </div>
+
+                    <!-- {# ----- Optional notes field (same as before) ----- #} -->
+                    <div class="mb-3">
+                        <label for="modalNotes" class="form-label">Special instructions (optional)</label>
+                        <textarea name="notes"
+                                  id="modalNotes"
+                                  rows="2"
+                                  class="form-control"
+                                  placeholder="e.g. No onions"></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal">Cancel</button>
+
+                    <button type="submit"
+                            class="btn btn-success"
+                            id="modalSubmitBtn"
+                            disabled>
+                        <i class="bi bi-cart-plus"></i> Add to Seat
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+<!-- {# --------------------------------------------------------------
+   JavaScript - seat selection handling (updates every form)
+   -------------------------------------------------------------- #} -->
+{% block scripts %}
+<script>
+    // ------------------------------------------------------------------
+    // 1️⃣ Keep track of the currently selected seat (its PK)
+    // ------------------------------------------------------------------
+    let activeSeatId = null;   // null = none selected
+
+    // ------------------------------------------------------------------
+    // 2️⃣ When a seat card is clicked, highlight it and store its id
+    // ------------------------------------------------------------------
+    const seatCards = document.querySelectorAll('.seat-card');
+
+    seatCards.forEach(card => {
+        card.addEventListener('click', () => {
+            // Remove highlight from any previously selected card
+            seatCards.forEach(c => c.classList.remove('border-primary'));
+
+            // Highlight the clicked card
+            card.classList.add('border-primary');
+
+            // Remember the seat id
+            activeSeatId = card.dataset.seatId;
+
+            // Update every hidden seat_id input in the menu forms
+            document.querySelectorAll('.selected-seat-id')
+                    .forEach(inp => inp.value = activeSeatId);
+
+            // Enable every “Add to Seat” button
+            document.querySelectorAll('.add-to-seat-btn')
+                    .forEach(btn => btn.disabled = false);
+        });
+    });
+
+    // ------------------------------------------------------------------
+    // 3️⃣ Auto‑focus logic on page load
+    // ------------------------------------------------------------------
+    window.addEventListener('load', () => {
+        const container = document.querySelector('[data-new-seat-id]');
+        const newSeatId = container?.dataset?.newSeatId;          // from add_seat
+        const activeSeatParam = container?.dataset?.activeSeatId; // from add_selection
+
+        // --------------------------------------------------------------
+        // CASE A: a brand‑new seat was just added (new_seat flag)
+        // --------------------------------------------------------------
+        if (newSeatId) {
+            const newlyCreated = document.querySelector(
+                `.seat-card[data-seat-id="${newSeatId}"]`
+            );
+            if (newlyCreated) {
+                newlyCreated.click();
+                newlyCreated.scrollIntoView({behavior: "smooth", block: "center"});
+                return;   // done
+            }
+        }
+
+        // --------------------------------------------------------------
+        // CASE B: we just added an item and have an active_seat param
+        // --------------------------------------------------------------
+        if (activeSeatParam) {
+            const activeCard = document.querySelector(
+                `.seat-card[data-seat-id="${activeSeatParam}"]`
+            );
+            if (activeCard) {
+                activeCard.click();
+                activeCard.scrollIntoView({behavior: "smooth", block: "center"});
+                return;   // done
+            }
+        }
+
+        // --------------------------------------------------------------
+        // CASE C: regular page load (no new seat, no active seat) → focus seat 1
+        // --------------------------------------------------------------
+        if (seatCards.length) {
+            seatCards[0].click();   // highlight seat 1
+            seatCards[0].scrollIntoView({behavior: "smooth", block: "center"});
+        }
+    });
+
+    // ------------------------------------------------------------------
+    // MODIFIER MODAL LOGIC – build a JavaScript array of all modifiers
+    // ------------------------------------------------------------------
+    const allModifiers = [
+      {% for mod in modifiers %}
+        {"id": {{ mod.id }},
+          "label": "{{ mod.label|escapejs }}",
+          "name": "{{ mod.name|escapejs }}"
+        }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ];
+
+    // ------------------------------------------------------------------
+    // Helper: render the list of check‑boxes inside the modal
+    // ------------------------------------------------------------------
+    const modalModifiersContainer = document.getElementById('modalModifiersContainer');
+    const modalSubmitBtn = document.getElementById('modalSubmitBtn');
+
+    function renderModifierCheckboxes() {
+        // Clear any previous content
+        modalModifiersContainer.innerHTML = '';
+
+        // Create a checkbox for each modifier (show the **full name**)
+        allModifiers.forEach(mod => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'form-check form-check-inline';
+
+            const input = document.createElement('input');
+            input.className = 'form-check-input';
+            input.type = 'checkbox';
+            input.name = 'modifier_ids';          // matches what add_selection expects
+            input.value = mod.id;
+            input.id = `modal-mod-${mod.id}`;
+
+            const label = document.createElement('label');
+            label.className = 'form-check-label';
+            label.htmlFor = input.id;
+            label.textContent = mod.name;        // **full name** displayed
+
+            wrapper.appendChild(input);
+            wrapper.appendChild(label);
+            modalModifiersContainer.appendChild(wrapper);
+        });
+
+        // Enable the “Add to Seat” button only when at least one box is checked
+        const checkboxes = modalModifiersContainer.querySelectorAll('input[type=checkbox]');
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', () => {
+                const anyChecked = Array.from(checkboxes).some(c => c.checked);
+                modalSubmitBtn.disabled = !anyChecked;
+            });
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // When the modal is shown, fill in the item data
+    // ------------------------------------------------------------------
+    const modsModal = document.getElementById('modsModal');
+    const modalItemIdInput = document.getElementById('modalItemId');
+    const modalItemNameSpan = document.getElementById('modalItemName');
+
+    modsModal.addEventListener('show.bs.modal', event => {
+        // Button that triggered the modal
+        const triggerBtn = event.relatedTarget;
+        const itemId   = triggerBtn.getAttribute('data-item-id');
+        const itemName = triggerBtn.getAttribute('data-item-name');
+
+        // Populate hidden field & title
+        modalItemIdInput.value = itemId;
+        modalItemNameSpan.textContent = itemName;
+
+        // Render the check‑boxes (full names)
+        renderModifierCheckboxes();
+
+        // Reset notes and disable submit until a box is checked
+        document.getElementById('modalNotes').value = '';
+        modalSubmitBtn.disabled = true;
+    });
+
+    // ------------------------------------------------------------------
+    // (Optional) keep the hidden seat_id input in sync – your existing code already does this.
+    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Enable the “Add to Seat” button on a card when any checkbox
+    // (modifier or temperature) inside that card’s form is checked.
+    // ------------------------------------------------------------------
+    document.querySelectorAll('.simple-add-form').forEach(form => {
+        const submitBtn = form.querySelector('.add-to-seat-btn');
+        const checkboxes = form.querySelectorAll('input[type=checkbox]');
+
+        // If the form has no checkboxes (e.g., no temperatures for that item)
+        // we still want the button enabled when a seat is selected.
+        const enableIfNeeded = () => {
+            // If there are no checkboxes at all, just enable the button
+            // (the user may want to add the item without any extra options).
+            if (checkboxes.length === 0) {
+                submitBtn.disabled = false;
+                return;
+            }
+
+            // Otherwise enable only when at least one box is checked
+            const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+            submitBtn.disabled = !anyChecked;
+        };
+
+        // Run once on page load (in case there are no checkboxes)
+        enableIfNeeded();
+
+        // Listen for changes on each checkbox
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', enableIfNeeded);
+        });
+    });
+
+     // --------------------------------------------------------------
+    // 1️⃣ Helper – get CSRF token for AJAX POSTs (Django requirement)
+    // --------------------------------------------------------------
+    function getCsrfToken() {
+        const cookie = document.cookie.split(';')
+            .map(c => c.trim())
+            .find(c => c.startsWith('csrftoken='));
+        return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
+    }
+
+    // --------------------------------------------------------------
+    // 2️⃣ Initialise Sortable on every seat list
+    // --------------------------------------------------------------
+    document.querySelectorAll('.seat-selections').forEach(listEl => {
+        new Sortable(listEl, {
+            group: 'selections',          // allow moving between lists
+            animation: 150,
+            ghostClass: 'bg-light',       // visual cue while dragging
+            // ----------------------------------------------------------
+            // When an item is dropped on a *different* seat list,
+            // we send an AJAX request to update the foreign key.
+            // ----------------------------------------------------------
+            onEnd: function (evt) {
+                const movedEl = evt.item;                     // <li> that was moved
+                const newList = evt.to;                       // target <ul>
+                const oldList = evt.from;                     // source <ul>
+
+                // If the item stayed in the same list, do nothing
+                if (newList === oldList) return;
+
+                const selectionId = movedEl.dataset.selectionId;   // PK of SeatSelection
+                const targetSeatId = newList.id.match(/seat-list-(\d+)/)[1]; // extract seat id
+
+                // ------------------------------------------------------
+                // AJAX POST to our tiny view that moves the selection
+                // ------------------------------------------------------
+                fetch("{% url 'orders:move_selection' %}", {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCsrfToken(),
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: `selection_id=${selectionId}&target_seat_id=${targetSeatId}`
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Network error');
+                    // Optional: show a toast or flash message
+                    // For now we just keep the UI as‑is (the DOM already moved the <li>)
+                })
+                .catch(err => {
+                    console.error('Move failed:', err);
+                    // If the request fails, you might want to move the element back:
+                    oldList.appendChild(movedEl);
+                });
+            }
+        });
+    });
+
+
+</script>
+{% endblock %}

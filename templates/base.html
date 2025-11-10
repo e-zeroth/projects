@@ -1,0 +1,148 @@
+{# templates/base.html #}
+{% load static %}
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}Restaurant Tablet{% endblock %}</title>
+
+    <!-- Bootswatch theme (includes Bootstrap) -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/sandstone/bootstrap.min.css"
+          integrity="sha384-…"
+          crossorigin="anonymous">
+    <link href="{% static 'css/custom.css' %}" rel="stylesheet" >
+    <!-- Optional: additional site‑wide CSS -->
+    <style>
+        body { padding-top: 3rem; }
+        .seat-card { min-width: 200px; }
+        /* --------------------------------------------------------------
+   Layout helpers for the tablet UI
+   -------------------------------------------------------------- */
+        .seat-scroll-container {
+            /* Height = viewport minus the fixed top navbar + some padding */
+            max-height: calc(100vh - 4rem);   /* adjust the 4rem if your header is taller */
+            overflow-y: auto;
+            padding-right: 0.6rem
+        }
+
+        /* Optional – give a subtle border to separate the columns */
+        .seat-column {
+            border-right: 1px solid #dee2e6;
+            padding-right: 1rem;
+}
+    </style>
+
+    {% block head %}{% endblock %}
+    <!-- base.html – inside <head> or just before </body> -->
+<!-- Load SortableJS (SRI‑verified) -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"
+            crossorigin="anonymous"></script>
+    
+</head>
+
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'orders:room_dashboard' %}">Restaurant Tablet</a>
+        {% if request.session.staff_name %}
+            <div class="d-flex align-items-center">
+                <span class="text-light me-3">
+                    Logged in as <strong>{{ request.session.staff_name }}</strong>
+                </span>
+                <a href="{% url 'orders:staff_logout' %}"
+                   class="btn btn-outline-light btn-sm">Logout</a>
+            </div>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container mt-4">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show"
+                 role="alert">
+                {{ message }}
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="alert"
+                        aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</div>
+
+<!-- Bootstrap JS (popper + bootstrap) -->
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
+        integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js"
+        integrity="sha384-0pUGZvbkm6XF6gxjEnlmuGrJXVbNuzT9qBBavbLwCsOGabYfZo0T0to5eqruptLy"
+        crossorigin="anonymous"></script>
+
+{% block scripts %}
+<script>
+    // --------------------------------------------------------------
+    // 1️⃣ Helper – get CSRF token for AJAX POSTs (Django requirement)
+    // --------------------------------------------------------------
+    function getCsrfToken() {
+        const cookie = document.cookie.split(';')
+            .map(c => c.trim())
+            .find(c => c.startsWith('csrftoken='));
+        return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
+    }
+
+    // --------------------------------------------------------------
+    // 2️⃣ Initialise Sortable on every seat list
+    // --------------------------------------------------------------
+    document.querySelectorAll('.seat-selections').forEach(listEl => {
+        new Sortable(listEl, {
+            group: 'selections',          // allow moving between lists
+            animation: 150,
+            ghostClass: 'bg-light',       // visual cue while dragging
+            // ----------------------------------------------------------
+            // When an item is dropped on a *different* seat list,
+            // we send an AJAX request to update the foreign key.
+            // ----------------------------------------------------------
+            onEnd: function (evt) {
+                const movedEl = evt.item;                     // <li> that was moved
+                const newList = evt.to;                       // target <ul>
+                const oldList = evt.from;                     // source <ul>
+
+                // If the item stayed in the same list, do nothing
+                if (newList === oldList) return;
+
+                const selectionId = movedEl.dataset.selectionId;   // PK of SeatSelection
+                const targetSeatId = newList.id.match(/seat-list-(\d+)/)[1]; // extract seat id
+
+                // ------------------------------------------------------
+                // AJAX POST to our tiny view that moves the selection
+                // ------------------------------------------------------
+                fetch("{% url 'orders:move_selection' %}", {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCsrfToken(),
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: `selection_id=${selectionId}&target_seat_id=${targetSeatId}`
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Network error');
+                    // Optional: show a toast or flash message
+                    // For now we just keep the UI as‑is (the DOM already moved the <li>)
+                })
+                .catch(err => {
+                    console.error('Move failed:', err);
+                    // If the request fails, you might want to move the element back:
+                    oldList.appendChild(movedEl);
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}
+</body>
+</html>

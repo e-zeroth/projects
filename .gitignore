@@ -1,0 +1,23 @@
+# Byte‑compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+$py.class
+
+# Virtual environment folders (if you keep them inside the project)
+venv/
+ENV/
+env/
+
+# Django‑specific stuff
+*.log
+local_settings.py
+db.sqlite3               # <-- keep your DB out of the repo (use migrations instead)
+media/                   # uploaded files (if any)
+staticfiles/             # collected static (if you commit the source static, not the output)
+
+# OS‑generated files
+.DS_Store
+Thumbs.db
+
+# Environment files (store them locally, not in git)
+.env
